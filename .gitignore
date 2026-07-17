@@ -8,6 +8,9 @@
 .idea
 .vscode
 *.swp
+*~
 .DS_Store
 /node_modules
 /coverage
+/auth.json
+.phpunit.result.cache

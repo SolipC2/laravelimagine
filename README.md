@@ -24,37 +24,6 @@ composer require solipc2/laravelimagine
 
 Laravel auto-discovers `SolipC2\LaravelImagine\ImagineServiceProvider`. No manual provider registration.
 
-Until the package is on Packagist, install from GitHub:
-
-```bash
-composer require solipc2/laravelimagine:dev-master
-```
-
-```json
-{
-  "repositories": [
-    {
-      "type": "vcs",
-      "url": "https://github.com/SolipC2/laravelimagine"
-    }
-  ]
-}
-```
-
-Or path-based while developing:
-
-```json
-{
-  "repositories": [
-    { "type": "path", "url": "../laravelimagine" }
-  ]
-}
-```
-
-```bash
-composer require solipc2/laravelimagine:@dev
-```
-
 ## Configuration
 
 Publish the config (optional):
@@ -148,13 +117,6 @@ It does **not** ship a chat UI, routes, or Docker stack.
 composer install
 composer test
 ```
-
-## Releasing (Packagist)
-
-1. Push this repo to [github.com/SolipC2/laravelimagine](https://github.com/SolipC2/laravelimagine).
-2. Tag a semver release: `git tag v1.0.0 && git push --tags`.
-3. Submit the GitHub URL at [packagist.org/packages/submit](https://packagist.org/packages/submit) (or connect the GitHub org).
-4. Consumers install with: `composer require solipc2/laravelimagine`.
 
 ## License
 
