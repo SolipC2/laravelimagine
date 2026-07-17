@@ -1,17 +1,161 @@
-# laravelimagine
+# solipc2/laravelimagine
 
-Grok Imagine connector demo for **laravelimagine.solipc2.com**.
+**Grok Imagine connector for Laravel** — generate images and videos with xAI Grok Imagine.
 
-- **Images**: `laravel/ai` → XAI `grok-imagine-image`
-- **Video**: app `XaiVideoClient` → XAI `grok-imagine-video`
-- **UI**: chat box on `/` with fake or live mode
+This package is **only** a connector (no UI, no demo routes). It integrates via Laravel package auto-discovery.
+
+| Mode  | How |
+|-------|-----|
+| Image | [`laravel/ai`](https://github.com/laravel/ai) → xAI `grok-imagine-image` |
+| Video | Package `XaiVideoClient` → xAI `grok-imagine-video` |
+
+## Requirements
+
+- PHP 8.3+
+- Laravel 12 or 13 (Illuminate HTTP/Support/Filesystem)
+- [`laravel/ai`](https://github.com/laravel/ai) `^0.9` (requires PHP 8.3+ and Illuminate 12|13)
+- An [xAI API key](https://console.x.ai/) for live generation
+
+## Install
 
 ```bash
-# tests
-php artisan test tests/Unit/ImagineServiceTest.php tests/Feature/ChatGenerateTest.php
-
-# local Host
-curl -H 'Host: laravelimagine.solipc2.com' http://127.0.0.1/
+composer require solipc2/laravelimagine
 ```
 
-Set `XAI_API_KEY` in Portainer stack env for live generation; default `IMAGINE_FAKE=true` for demos.
+Laravel auto-discovers `SolipC2\LaravelImagine\ImagineServiceProvider`. No manual provider registration.
+
+Until the package is on Packagist, install from GitHub:
+
+```bash
+composer require solipc2/laravelimagine:dev-master
+```
+
+```json
+{
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "https://github.com/SolipC2/laravelimagine"
+    }
+  ]
+}
+```
+
+Or path-based while developing:
+
+```json
+{
+  "repositories": [
+    { "type": "path", "url": "../laravelimagine" }
+  ]
+}
+```
+
+```bash
+composer require solipc2/laravelimagine:@dev
+```
+
+## Configuration
+
+Publish the config (optional):
+
+```bash
+php artisan vendor:publish --tag=imagine-config
+```
+
+| Env | Purpose | Default |
+|-----|---------|---------|
+| `XAI_API_KEY` | xAI API key (also used by `laravel/ai`) | — |
+| `IMAGINE_FAKE` | Bind fake video client (offline demos/tests) | `false` |
+| `XAI_VIDEO_MODEL` | Video model name | `grok-imagine-video` |
+| `XAI_BASE_URL` | xAI API base URL | `https://api.x.ai/v1` |
+| `IMAGINE_STORE_IMAGES` | Write image binaries to a disk for a URL | `true` |
+| `IMAGINE_DISK` | Filesystem disk for images | `public` |
+
+Ensure `laravel/ai` is configured for xAI (typically `XAI_API_KEY` and `config/ai.php` provider `xai`).
+
+## Usage
+
+```php
+use SolipC2\LaravelImagine\ImagineService;
+use Laravel\Ai\Image;
+
+// Resolve from the container (auto-bound by the service provider)
+$imagine = app(ImagineService::class);
+
+// Image (live — requires XAI_API_KEY)
+$image = $imagine->generateImage('a red cube on a table');
+// $image->base64, $image->url, $image->mime, $image->hasMedia()
+
+// Video (live — requires XAI_API_KEY; uses XaiVideoClient)
+$video = $imagine->generateVideo('rocket launch over mars', [
+    'duration' => 6,
+    'aspect_ratio' => '16:9',
+    'resolution' => '480p',
+]);
+// $video->url, $video->mime
+
+// Unified entry
+$result = $imagine->generate('image', 'blue sphere floating');
+$result = $imagine->generate('video', 'waves on black sand');
+```
+
+### Testing / offline fakes
+
+```php
+use Laravel\Ai\Image;
+use SolipC2\LaravelImagine\FakeXaiVideoClient;
+use SolipC2\LaravelImagine\ImagineService;
+
+// Images: laravel/ai fake gateway
+Image::fake([base64_encode('test-bytes')]);
+$image = app(ImagineService::class)->generateImage('test prompt');
+
+// Videos: bind fake client or set IMAGINE_FAKE=true
+app()->bind(
+    \SolipC2\LaravelImagine\Contracts\VideoClient::class,
+    fn () => new FakeXaiVideoClient
+);
+```
+
+### Result shape
+
+```php
+$result->type;     // 'image' | 'video'
+$result->prompt;
+$result->url;      // nullable
+$result->base64;   // nullable (images)
+$result->mime;
+$result->meta;     // array
+$result->hasMedia();
+$result->toArray();
+```
+
+## Scope
+
+This package ships **only** the Grok Imagine connector:
+
+- `ImagineService`, `ImagineResult`
+- `XaiVideoClient`, `FakeXaiVideoClient`
+- `Contracts\VideoClient`
+- Config `imagine` + service provider bindings
+
+It does **not** ship a chat UI, routes, or Docker stack.
+
+## Development
+
+```bash
+composer install
+composer test
+```
+
+## Releasing (Packagist)
+
+1. Push this repo to [github.com/SolipC2/laravelimagine](https://github.com/SolipC2/laravelimagine).
+2. Tag a semver release: `git tag v1.0.0 && git push --tags`.
+3. Submit the GitHub URL at [packagist.org/packages/submit](https://packagist.org/packages/submit) (or connect the GitHub org).
+4. Consumers install with: `composer require solipc2/laravelimagine`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
