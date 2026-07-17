@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\Imagine\Contracts\VideoClient;
 use App\Services\Imagine\FakeXaiVideoClient;
 use App\Services\Imagine\ImagineService;
+use App\Services\Imagine\XaiVideoClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -21,7 +22,7 @@ class ChatController extends Controller
         ]);
     }
 
-    public function generate(Request $request, ImagineService $imagine): JsonResponse
+    public function generate(Request $request): JsonResponse
     {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'max:4000'],
@@ -30,7 +31,10 @@ class ChatController extends Controller
             'fake' => ['nullable', 'boolean'],
         ]);
 
-        $useFake = $request->boolean('fake') || (bool) config('imagine.fake_video');
+        // Explicit request "fake" wins over IMAGINE_FAKE / config default.
+        $useFake = $request->exists('fake')
+            ? $request->boolean('fake')
+            : (bool) config('imagine.fake_video');
 
         try {
             if ($data['mode'] === 'image' && $useFake) {
@@ -39,10 +43,12 @@ class ChatController extends Controller
                 ]);
             }
 
-            if ($data['mode'] === 'video' && $useFake) {
-                app()->instance(VideoClient::class, new FakeXaiVideoClient);
-                $imagine = new ImagineService(app(VideoClient::class));
-            }
+            $videoClient = $useFake
+                ? new FakeXaiVideoClient
+                : $this->makeLiveVideoClient();
+
+            // Always build a fresh service so Live is never stuck on a fake singleton.
+            $imagine = new ImagineService($videoClient);
 
             $options = array_filter([
                 'duration' => $data['duration'] ?? 6,
@@ -57,9 +63,18 @@ class ChatController extends Controller
                 ], 500);
             }
 
+            // Guard: Live must never return demo/fake media markers.
+            if (! $useFake && ($result->meta['fake'] ?? false) === true) {
+                return response()->json([
+                    'ok' => false,
+                    'error' => 'Live mode produced fake media; refusing to return it.',
+                ], 500);
+            }
+
             return response()->json([
                 'ok' => true,
                 'result' => $result->toArray(),
+                'gateway' => $useFake ? 'fake' : 'live',
             ]);
         } catch (Throwable $e) {
             $message = $e->getMessage();
@@ -68,7 +83,18 @@ class ChatController extends Controller
             return response()->json([
                 'ok' => false,
                 'error' => $message,
+                'gateway' => $useFake ? 'fake' : 'live',
             ], $status);
         }
+    }
+
+    protected function makeLiveVideoClient(): VideoClient
+    {
+        return new XaiVideoClient(
+            app(\Illuminate\Http\Client\Factory::class),
+            config('ai.providers.xai.key') ?? env('XAI_API_KEY'),
+            rtrim((string) config('imagine.video_base_url', 'https://api.x.ai/v1'), '/'),
+            (string) config('imagine.video_model', 'grok-imagine-video'),
+        );
     }
 }

@@ -12,26 +12,22 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(VideoClient::class, function ($app) {
-            if (config('imagine.fake_video') || $app->environment('testing')) {
+        // Default binding for DI/tests. HTTP chat always builds its own client
+        // in ChatController so Live (fake:false) is never trapped on a fake singleton.
+        $this->app->bind(VideoClient::class, function ($app) {
+            if ($app->environment('testing') && config('imagine.fake_video', true)) {
                 return new FakeXaiVideoClient;
             }
 
-            if (! filled(config('ai.providers.xai.key') ?? env('XAI_API_KEY'))) {
-                // No key: still bind fake so UI can demo without 500 when IMAGINE_FAKE defaults on production...
-                // Production without key uses real client and returns honest errors from ImagineService.
-                return new XaiVideoClient($app['http']);
-            }
-
             return new XaiVideoClient(
-                $app['http'],
+                $app->make(\Illuminate\Http\Client\Factory::class),
                 config('ai.providers.xai.key') ?? env('XAI_API_KEY'),
                 rtrim((string) config('imagine.video_base_url', 'https://api.x.ai/v1'), '/'),
                 (string) config('imagine.video_model', 'grok-imagine-video'),
             );
         });
 
-        $this->app->singleton(ImagineService::class, function ($app) {
+        $this->app->bind(ImagineService::class, function ($app) {
             return new ImagineService($app->make(VideoClient::class));
         });
     }
